@@ -1,14 +1,56 @@
 import './style.css'
 import { TEAMS, TOTAL_STICKERS, GROUPS } from './teams.js'
 import { loadOwned, saveOwned, stickerKey } from './storage.js'
+import { auth, db, googleProvider } from './firebase.js'
+import { signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth'
+import { doc, setDoc, getDoc, onSnapshot } from 'firebase/firestore'
 
 let owned = loadOwned()
 let filterMode = 'all'
 let groupView = false
+let currentUser = null
+let unsubSync = null
 
 // reverse map: code → group label
 const TEAM_GROUP = {}
 Object.entries(GROUPS).forEach(([g, codes]) => codes.forEach(c => { TEAM_GROUP[c] = g }))
+
+// ── cloud sync ────────────────────────────────────────────────────────────────
+
+function cloudRef(uid) {
+  return doc(db, 'users', uid, 'data', 'stickers')
+}
+
+async function pushToCloud(data) {
+  if (!currentUser) return
+  try {
+    await setDoc(cloudRef(currentUser.uid), { owned: data })
+  } catch (e) {
+    console.error('Cloud sync failed', e)
+  }
+}
+
+function persistOwned() {
+  saveOwned(owned)
+  pushToCloud(owned)
+}
+
+function startSync(uid) {
+  if (unsubSync) unsubSync()
+  unsubSync = onSnapshot(cloudRef(uid), snap => {
+    if (snap.exists()) {
+      const data = snap.data().owned || {}
+      owned = data
+      saveOwned(data)
+      updateStats()
+      render()
+    }
+  }, err => console.error('Sync error', err))
+}
+
+function stopSync() {
+  if (unsubSync) { unsubSync(); unsubSync = null }
+}
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -176,7 +218,7 @@ function openStickerModal(team) {
       el.addEventListener('click', () => {
         if (owned[k]) delete owned[k]
         else owned[k] = true
-        saveOwned(owned)
+        persistOwned()
         renderModalContent()
         updateStats()
         render()
@@ -187,14 +229,14 @@ function openStickerModal(team) {
     modal.querySelector('.album-close-btn').addEventListener('click', close)
     modal.querySelector('.album-mark-all').addEventListener('click', () => {
       team.stickers.forEach(s => { owned[stickerKey(team.code, s.n)] = true })
-      saveOwned(owned)
+      persistOwned()
       renderModalContent()
       updateStats()
       render()
     })
     modal.querySelector('.album-clear-all').addEventListener('click', () => {
       team.stickers.forEach(s => { delete owned[stickerKey(team.code, s.n)] })
-      saveOwned(owned)
+      persistOwned()
       renderModalContent()
       updateStats()
       render()
@@ -245,7 +287,10 @@ function bootstrap() {
             <div class="header-title">Panini World Cup 2026 Stickers</div>
             <div class="header-sub">Panini official · ${TOTAL_STICKERS} stickers · 48 teams</div>
           </div>
-          <button class="reset-btn" id="reset-btn" aria-label="Reset all progress">Reset</button>
+          <div class="header-actions">
+            <button class="reset-btn" id="reset-btn" aria-label="Reset all progress">Reset</button>
+            <div id="auth-section"></div>
+          </div>
         </div>
         <div class="progress-bar-wrap">
           <div class="progress-bar-fill" id="global-bar" style="width:0%"></div>
@@ -305,7 +350,32 @@ function bootstrap() {
 
   document.getElementById('reset-btn').addEventListener('click', showResetConfirm)
 
+  updateAuthUI()
   render()
 }
 
 bootstrap()
+
+onAuthStateChanged(auth, async user => {
+  currentUser = user
+  if (user) {
+    try {
+      const snap = await getDoc(cloudRef(user.uid))
+      if (snap.exists()) {
+        owned = snap.data().owned || {}
+        saveOwned(owned)
+      } else if (Object.keys(owned).length > 0) {
+        await pushToCloud(owned)
+      }
+    } catch (e) {
+      console.error('Failed to load cloud data', e)
+    }
+    startSync(user.uid)
+  } else {
+    stopSync()
+    owned = loadOwned()
+  }
+  updateAuthUI()
+  updateStats()
+  render()
+})

@@ -680,3 +680,85 @@ body {
   .album-modal { border-radius: 16px 16px 0 0; max-height: 92vh; max-width: 100%; }
   .album-sticker-grid { grid-template-columns: repeat(auto-fill, minmax(60px, 1fr)); gap: 8px; padding: 14px; }
 }
+
+/* ── Auth UI ─────────────────────────────────────────────────────── */
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sign-in-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-family: 'Roboto', sans-serif;
+  font-weight: 500;
+  padding: 7px 14px;
+  border-radius: 20px;
+  border: var(--border);
+  background: #fff;
+  color: var(--text);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: box-shadow 0.15s, background 0.15s;
+  letter-spacing: 0.01em;
+}
+.sign-in-btn:hover { box-shadow: 0 1px 6px rgba(0,0,0,0.12); background: #f8f9fa; }
+
+.user-pill {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 3px 8px 3px 3px;
+  border: var(--border);
+  border-radius: 20px;
+  background: #fff;
+}
+
+.user-avatar {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.user-avatar-placeholder {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--bg-tertiary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.user-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  font-family: 'Roboto', sans-serif;
+}
+
+.sign-out-btn {
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: var(--text-tertiary);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  transition: background 0.15s, color 0.15s;
+  padding: 0;
+}
+.sign-out-btn:hover { background: var(--bg-tertiary); color: var(--text); }
