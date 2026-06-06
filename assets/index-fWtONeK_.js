@@ -3187,8 +3187,8 @@ This typically indicates that your device does not have a healthy Internet conne
         </div>
         <div class="header-top">
           <div>
-            <div class="header-title">Panini World Cup 2026 Stickers</div>
-            <div class="header-sub">Panini official · ${Xr} stickers · 48 teams</div>
+            <div class="header-title">World Cup 2026 Stickers</div>
+            <div class="header-sub">${Xr} stickers · 48 teams</div>
           </div>
           <div class="header-actions">
             <button class="reset-btn" id="reset-btn" aria-label="Reset all progress">Reset</button>
