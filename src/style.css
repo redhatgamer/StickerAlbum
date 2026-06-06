@@ -762,3 +762,163 @@ body {
   padding: 0;
 }
 .sign-out-btn:hover { background: var(--bg-tertiary); color: var(--text); }
+
+/* ── Header Tabs ─────────────────────────────────────────────────────── */
+
+.header-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.header-tab {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 13px;
+  font-family: 'Roboto', sans-serif;
+  font-weight: 500;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: none;
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s;
+  letter-spacing: 0.01em;
+}
+.header-tab:hover { background: var(--bg-tertiary); color: var(--text); }
+.header-tab.active { background: var(--accent); color: #fff; }
+.header-tab i { font-size: 15px; }
+
+/* ── Schedule View ───────────────────────────────────────────────────────── */
+
+#teams-container.schedule-view {
+  padding: 16px;
+  overflow-y: auto;
+}
+
+.schedule-date-section {
+  margin-bottom: 24px;
+}
+
+.schedule-date-header {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 12px;
+  padding: 0 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  font-family: 'Roboto', sans-serif;
+}
+
+.schedule-match-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.schedule-match-card {
+  display: grid;
+  grid-template-columns: 60px 1fr 100px;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 14px;
+  background: var(--bg-secondary);
+  border: var(--border);
+  border-radius: var(--radius-md);
+  transition: all 0.15s;
+}
+.schedule-match-card:hover {
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  background: var(--bg);
+}
+
+.match-time {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  font-family: 'Roboto', sans-serif;
+  letter-spacing: 0.01em;
+}
+
+.match-teams {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.match-team {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+}
+
+.match-flag {
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.match-name {
+  font-size: 13px;
+  color: var(--text);
+  font-weight: 500;
+  font-family: 'Roboto', sans-serif;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.match-vs {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.match-stage {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  text-align: right;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+/* Schedule on tablet */
+@media (min-width: 768px) {
+  .schedule-match-card {
+    grid-template-columns: 70px 1fr 120px;
+    gap: 16px;
+    padding: 14px 16px;
+  }
+  .match-name { font-size: 14px; }
+  .match-time { font-size: 14px; }
+}
+
+/* Schedule on desktop */
+@media (min-width: 1200px) {
+  #teams-container.schedule-view {
+    max-width: 900px;
+    margin: 0 auto;
+  }
+  .schedule-date-section { margin-bottom: 32px; }
+  .schedule-match-card {
+    grid-template-columns: 80px 1fr 140px;
+    padding: 16px 18px;
+  }
+  .match-name { font-size: 15px; }
+}
+
+/* Mobile schedule */
+@media (max-width: 600px) {
+  .schedule-match-card {
+    grid-template-columns: 50px 1fr 80px;
+    gap: 8px;
+    padding: 10px 12px;
+  }
+  .match-name { font-size: 12px; }
+  .match-flag { font-size: 18px; }
+}

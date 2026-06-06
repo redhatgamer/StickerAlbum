@@ -1,6 +1,7 @@
 import './style.css'
 import { TEAMS, TOTAL_STICKERS, GROUPS } from './teams.js'
 import { loadOwned, saveOwned, stickerKey } from './storage.js'
+import { MATCHES, TEAM_NAMES, TEAM_FLAGS } from './schedule.js'
 import { auth, db, googleProvider } from './firebase.js'
 import { signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth'
 import { doc, setDoc, getDoc, onSnapshot } from 'firebase/firestore'
@@ -10,6 +11,7 @@ let filterMode = 'all'
 let groupView = false
 let currentUser = null
 let unsubSync = null
+let currentView = 'stickers'  // 'stickers' or 'schedule'
 
 // reverse map: code → group label
 const TEAM_GROUP = {}
@@ -116,6 +118,7 @@ function buildTeamCard(team) {
 function render() {
   const search = document.getElementById('search').value.toLowerCase().trim()
   const container = document.getElementById('teams-container')
+  container.classList.remove('schedule-view')
   container.innerHTML = ''
 
   const filtered = TEAMS
@@ -156,6 +159,74 @@ function render() {
   }
 
   updateStats()
+}
+
+// ── schedule ───────────────────────────────────────────────────────────────────
+
+function renderSchedule() {
+  const container = document.getElementById('teams-container')
+  container.classList.add('schedule-view')
+  container.innerHTML = ''
+
+  const now = new Date()
+  const userTz = Intl.DateTimeFormat().resolvedOptions().timeZone
+
+  const matchesByDate = {}
+  MATCHES.forEach(m => {
+    const d = new Date(m.date).toLocaleDateString('en-US')
+    if (!matchesByDate[d]) matchesByDate[d] = []
+    matchesByDate[d].push(m)
+  })
+
+  const sortedDates = Object.keys(matchesByDate).sort()
+
+  sortedDates.forEach(dateStr => {
+    const section = document.createElement('div')
+    section.className = 'schedule-date-section'
+
+    const dateHeader = document.createElement('div')
+    dateHeader.className = 'schedule-date-header'
+    dateHeader.textContent = new Date(dateStr).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })
+    section.appendChild(dateHeader)
+
+    const matchList = document.createElement('div')
+    matchList.className = 'schedule-match-list'
+
+    matchesByDate[dateStr].forEach(m => {
+      const utcDate = new Date(m.date)
+      const localDate = new Date(utcDate.toLocaleString('en-US', { timeZone: userTz }))
+
+      const match = document.createElement('div')
+      match.className = 'schedule-match-card'
+
+      const homeTeam = m.home.length === 2 ? TEAM_NAMES[m.home] || m.home : m.home
+      const awayTeam = m.away.length === 2 ? TEAM_NAMES[m.away] || m.away : m.away
+      const homeFlag = TEAM_FLAGS[m.home] || ''
+      const awayFlag = TEAM_FLAGS[m.away] || ''
+
+      const timeStr = localDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })
+
+      match.innerHTML = `
+        <div class="match-time">${timeStr}</div>
+        <div class="match-teams">
+          <div class="match-team">
+            <span class="match-flag">${homeFlag}</span>
+            <span class="match-name">${homeTeam}</span>
+          </div>
+          <div class="match-vs">vs</div>
+          <div class="match-team">
+            <span class="match-flag">${awayFlag}</span>
+            <span class="match-name">${awayTeam}</span>
+          </div>
+        </div>
+        <div class="match-stage">${m.stage}</div>
+      `
+      matchList.appendChild(match)
+    })
+
+    section.appendChild(matchList)
+    container.appendChild(section)
+  })
 }
 
 // ── sticker modal ─────────────────────────────────────────────────────────────
@@ -319,6 +390,10 @@ function bootstrap() {
   document.getElementById('app').innerHTML = `
     <header class="header">
       <div class="header-inner">
+        <div class="header-tabs">
+          <button class="header-tab active" data-tab="stickers"><i class="ti ti-album"></i> Stickers</button>
+          <button class="header-tab" data-tab="schedule"><i class="ti ti-calendar"></i> Schedule</button>
+        </div>
         <div class="header-top">
           <div>
             <div class="header-title">Panini World Cup 2026 Stickers</div>
@@ -382,6 +457,21 @@ function bootstrap() {
       btn.classList.add('active')
       groupView = btn.dataset.v === 'group'
       render()
+    })
+  })
+
+  document.querySelectorAll('[data-tab]').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('[data-tab]').forEach(t => t.classList.remove('active'))
+      tab.classList.add('active')
+      currentView = tab.dataset.tab
+      if (currentView === 'schedule') {
+        document.querySelector('.sidebar').style.display = 'none'
+        renderSchedule()
+      } else {
+        document.querySelector('.sidebar').style.display = 'flex'
+        render()
+      }
     })
   })
 
