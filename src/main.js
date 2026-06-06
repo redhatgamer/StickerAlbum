@@ -396,8 +396,8 @@ function bootstrap() {
         </div>
         <div class="header-top">
           <div>
-            <div class="header-title">Panini World Cup 2026 Stickers</div>
-            <div class="header-sub">Panini official · ${TOTAL_STICKERS} stickers · 48 teams</div>
+            <div class="header-title">World Cup 2026 Stickers</div>
+            <div class="header-sub">${TOTAL_STICKERS} stickers · 48 teams</div>
           </div>
           <div class="header-actions">
             <button class="reset-btn" id="reset-btn" aria-label="Reset all progress">Reset</button>
@@ -465,11 +465,13 @@ function bootstrap() {
       document.querySelectorAll('[data-tab]').forEach(t => t.classList.remove('active'))
       tab.classList.add('active')
       currentView = tab.dataset.tab
+      const sidebar = document.querySelector('.sidebar')
       if (currentView === 'schedule') {
-        document.querySelector('.sidebar').style.display = 'none'
+        sidebar.classList.add('hidden')
         renderSchedule()
       } else {
-        document.querySelector('.sidebar').style.display = 'flex'
+        document.getElementById('search').value = ''
+        sidebar.classList.remove('hidden')
         render()
       }
     })

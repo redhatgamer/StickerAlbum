@@ -763,6 +763,11 @@ body {
 }
 .sign-out-btn:hover { background: var(--bg-tertiary); color: var(--text); }
 
+/* Sidebar visibility toggle */
+.sidebar.hidden {
+  display: none;
+}
+
 /* ── Header Tabs ─────────────────────────────────────────────────────── */
 
 .header-tabs {
