@@ -1,0 +1,16 @@
+{
+  "name": "wc2026-tracker",
+  "version": "1.0.0",
+  "description": "Panini World Cup 2026 sticker tracker",
+  "homepage": "https://github.com/redhatgamer/StickerAlbum",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "deploy": "vite build && gh-pages -d dist"
+  },
+  "devDependencies": {
+    "vite": "^5.4.0",
+    "gh-pages": "^6.1.1"
+  }
+}
