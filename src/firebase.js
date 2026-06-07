@@ -17,3 +17,7 @@ const app = initializeApp(firebaseConfig)
 export const auth = getAuth(app)
 export const db = getFirestore(app)
 export const googleProvider = new GoogleAuthProvider()
+
+// Pro feature tracking
+export const PRO_COLORS = ['blue', 'red', 'purple', 'green', 'black']
+export const PRO_PRICE = 2.99

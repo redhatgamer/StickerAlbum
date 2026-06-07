@@ -1,17 +1,23 @@
 import './style.css'
 import { TEAMS, TOTAL_STICKERS, GROUPS } from './teams.js'
-import { loadOwned, saveOwned, stickerKey } from './storage.js'
-import { MATCHES, TEAM_NAMES, TEAM_FLAGS } from './schedule.js'
-import { auth, db, googleProvider } from './firebase.js'
+import { loadOwned, saveOwned, stickerKey, loadProStatus, saveProStatus } from './storage.js'
+import { MATCHES, TEAM_NAMES, TEAM_ISO, flagImg } from './schedule.js'
+import { auth, db, googleProvider, PRO_COLORS, PRO_PRICE } from './firebase.js'
 import { signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth'
 import { doc, setDoc, getDoc, onSnapshot } from 'firebase/firestore'
 
 let owned = loadOwned()
 let filterMode = 'all'
-let groupView = false
+let groupView = true
 let currentUser = null
 let unsubSync = null
 let currentView = 'stickers'  // 'stickers' or 'schedule'
+let proStatus = loadProStatus()  // { purchased: bool, purchaseDate: date, uid: string }
+
+// Debounce state for cloud sync
+let cloudSyncPending = false
+let cloudSyncTimeout = null
+const CLOUD_SYNC_DELAY = 300  // ms - batch updates within 300ms
 
 // reverse map: code → group label
 const TEAM_GROUP = {}
@@ -23,6 +29,10 @@ function cloudRef(uid) {
   return doc(db, 'users', uid, 'data', 'stickers')
 }
 
+function proRef(uid) {
+  return doc(db, 'users', uid, 'data', 'pro')
+}
+
 async function pushToCloud(data) {
   if (!currentUser) return
   try {
@@ -32,9 +42,24 @@ async function pushToCloud(data) {
   }
 }
 
+async function pushProStatusToCloud() {
+  if (!currentUser) return
+  try {
+    await setDoc(proRef(currentUser.uid), { ...proStatus, uid: currentUser.uid })
+  } catch (e) {
+    console.error('Pro status sync failed', e)
+  }
+}
+
 function persistOwned() {
   saveOwned(owned)
-  pushToCloud(owned)
+  // Debounce cloud sync - batch multiple updates
+  if (cloudSyncTimeout) clearTimeout(cloudSyncTimeout)
+  cloudSyncPending = true
+  cloudSyncTimeout = setTimeout(() => {
+    pushToCloud(owned)
+    cloudSyncPending = false
+  }, CLOUD_SYNC_DELAY)
 }
 
 function startSync(uid) {
@@ -48,6 +73,16 @@ function startSync(uid) {
       render()
     }
   }, err => console.error('Sync error', err))
+  
+  // Also sync pro status
+  onSnapshot(proRef(uid), snap => {
+    if (snap.exists()) {
+      const data = snap.data()
+      proStatus = { purchased: data.purchased, purchaseDate: data.purchaseDate }
+      saveProStatus(proStatus)
+      updateAuthUI()
+    }
+  }, err => console.error('Pro sync error', err))
 }
 
 function stopSync() {
@@ -57,10 +92,15 @@ function stopSync() {
 // ── helpers ──────────────────────────────────────────────────────────────────
 
 function teamOwned(team) {
-  return team.stickers.filter(s => owned[stickerKey(team.code, s.n)]).length
+  return team.stickers.filter(s => owned[stickerKey(team.code, s.n)] && owned[stickerKey(team.code, s.n)] > 0).length
 }
 
 function totalOwned() {
+  // For non-pro: count unique stickers
+  // For pro: sum all quantities
+  if (proStatus.purchased) {
+    return Object.keys(owned).reduce((sum, k) => sum + (owned[k] || 0), 0)
+  }
   return Object.keys(owned).filter(k => owned[k]).length
 }
 
@@ -98,7 +138,7 @@ function buildTeamCard(team) {
   hdr.setAttribute('role', 'button')
   hdr.setAttribute('aria-label', `Open ${team.name} sticker album`)
   hdr.innerHTML = `
-    <div class="team-flag">${team.flag}</div>
+    <div class="team-flag">${flagImg(team.code, 32)}</div>
     <div class="team-info">
       <div class="team-name">${team.name}</div>
       <div class="team-code">${team.code} &middot; ${have}/${total}</div>
@@ -201,8 +241,8 @@ function renderSchedule() {
 
       const homeTeam = m.home.length === 2 ? TEAM_NAMES[m.home] || m.home : m.home
       const awayTeam = m.away.length === 2 ? TEAM_NAMES[m.away] || m.away : m.away
-      const homeFlag = TEAM_FLAGS[m.home] || ''
-      const awayFlag = TEAM_FLAGS[m.away] || ''
+      const homeFlag = flagImg(m.home, 24)
+      const awayFlag = flagImg(m.away, 24)
 
       const timeStr = localDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })
 
@@ -229,7 +269,7 @@ function renderSchedule() {
   })
 }
 
-// ── sticker modal ─────────────────────────────────────────────────────────────
+// ── sticker modal ─────────────────────────────────────────────────────────
 
 function openStickerModal(team) {
   const overlay = document.createElement('div')
@@ -251,7 +291,7 @@ function openStickerModal(team) {
     modal.innerHTML = `
       <div class="album-modal-header">
         <div class="album-modal-team-info">
-          <span class="album-modal-flag">${team.flag}</span>
+          <span class="album-modal-flag">${flagImg(team.code, 48)}</span>
           <div>
             <div class="album-modal-name">${team.name}</div>
             <div class="album-modal-meta">${team.code} &nbsp;·&nbsp; ${have} / ${total} &nbsp;·&nbsp; ${pct}%</div>
@@ -272,34 +312,76 @@ function openStickerModal(team) {
     const grid = modal.querySelector('.album-sticker-grid')
     team.stickers.forEach(s => {
       const k = stickerKey(team.code, s.n)
-      const hasIt = !!owned[k]
+      const quantity = owned[k] || 0
+      const hasIt = quantity > 0
       const el = document.createElement('div')
       el.className = 'album-sticker' + (hasIt ? ' have' : '') + (s.foil ? ' foil' : '')
-      el.setAttribute('role', 'checkbox')
+      el.setAttribute('role', proStatus.purchased ? 'button' : 'checkbox')
       el.setAttribute('aria-checked', String(hasIt))
       el.setAttribute('aria-label', `${team.code} ${s.n} ${s.t}`)
+      
+      // Show parallel colors for pro users
+      let parallelsHtml = ''
+      if (proStatus.purchased) {
+        parallelsHtml = '<div class="album-sticker-parallels">'
+        PRO_COLORS.forEach(color => {
+          const colorKey = stickerKey(team.code, s.n, color)
+          const count = owned[colorKey] ? 1 : 0
+          const colorBg = {
+            blue: '#3b82f6',
+            red: '#ef4444',
+            purple: '#a855f7',
+            green: '#22c55e',
+            black: '#1f2937'
+          }[color]
+          parallelsHtml += `<div class="parallel-dot" data-color="${color}" style="background-color: ${colorBg}; opacity: ${count > 0 ? 1 : 0.2};" title="${color}"></div>`
+        })
+        parallelsHtml += '</div>'
+      }
+      
+      // Show quantity badge for pro users
+      let quantityBadge = ''
+      if (proStatus.purchased && quantity > 0) {
+        quantityBadge = `<div class="album-quantity-badge">${quantity}</div>`
+      }
+      
       el.innerHTML = `
         <div class="album-sticker-inner">
           ${s.foil ? '<div class="album-foil-badge">✦</div>' : ''}
+          ${quantityBadge}
           ${hasIt ? '<div class="album-check"><i class="ti ti-check"></i></div>' : ''}
-          <div class="album-sticker-num">${team.code}<br>${s.n}</div>
+          ${s.img ? `<img src="${s.img}" alt="${s.t}" class="album-sticker-img" />` : `<div class="album-sticker-num">${team.code}<br>${s.n}</div>`}
           <div class="album-sticker-type">${s.t}</div>
+          ${parallelsHtml}
         </div>
       `
-      el.addEventListener('click', () => {
-        if (owned[k]) delete owned[k]
-        else owned[k] = true
-        persistOwned()
-        renderModalContent()
-        updateStats()
-        render()
+      
+      el.addEventListener('click', (e) => {
+        // If pro and clicking on a parallel color dot
+        if (proStatus.purchased && e.target.classList.contains('parallel-dot')) {
+          const color = e.target.dataset.color
+          const colorKey = stickerKey(team.code, s.n, color)
+          // Open quantity picker for the color variant
+          showQuantityPicker(team, s, colorKey, color)
+        } else if (proStatus.purchased) {
+          // Open quantity picker for pro users
+          showQuantityPicker(team, s, k)
+        } else {
+          // Standard toggle for non-pro
+          if (owned[k]) delete owned[k]
+          else owned[k] = true
+          persistOwned()
+          renderModalContent()
+          updateStats()
+          render()
+        }
       })
       grid.appendChild(el)
     })
 
     modal.querySelector('.album-close-btn').addEventListener('click', close)
     modal.querySelector('.album-mark-all').addEventListener('click', () => {
-      team.stickers.forEach(s => { owned[stickerKey(team.code, s.n)] = true })
+      team.stickers.forEach(s => { owned[stickerKey(team.code, s.n)] = 1 })
       persistOwned()
       renderModalContent()
       updateStats()
@@ -312,6 +394,91 @@ function openStickerModal(team) {
       updateStats()
       render()
     })
+  }
+
+  function showQuantityPicker(team, sticker, key, color) {
+    const currentQty = owned[key] || 0
+    const quantityOverlay = document.createElement('div')
+    quantityOverlay.className = 'modal-overlay'
+    const colorLabel = color ? ` (${color.toUpperCase()})` : ''
+    quantityOverlay.innerHTML = `
+      <div class="quantity-picker-modal">
+        <div class="quantity-picker-title">${team.code} #${sticker.n} - ${sticker.t}${colorLabel}</div>
+        <div class="quantity-picker-content">
+          <div class="quantity-display">
+            <span class="quantity-label">Quantity:</span>
+            <span class="quantity-value">${currentQty}</span>
+          </div>
+          <div class="quantity-controls">
+            <button class="qty-btn qty-minus">−</button>
+            <button class="qty-btn qty-plus">+</button>
+          </div>
+          <div class="quantity-presets">
+            <button class="qty-preset" data-qty="1">1</button>
+            <button class="qty-preset" data-qty="5">5</button>
+            <button class="qty-preset" data-qty="10">10</button>
+            <button class="qty-preset" data-qty="20">20</button>
+            <button class="qty-preset" data-qty="50">50</button>
+            <button class="qty-preset" data-qty="0">Clear</button>
+          </div>
+        </div>
+        <div class="quantity-picker-footer">
+          <button class="qty-action-btn qty-cancel">Cancel</button>
+          <button class="qty-action-btn qty-confirm">Confirm</button>
+        </div>
+      </div>
+    `
+    
+    let newQty = currentQty
+    const qtyValue = quantityOverlay.querySelector('.quantity-value')
+    const minusBtn = quantityOverlay.querySelector('.qty-minus')
+    const plusBtn = quantityOverlay.querySelector('.qty-plus')
+    
+    const updateDisplay = (val) => {
+      newQty = Math.max(0, Math.min(999, parseInt(val) || 0))
+      qtyValue.textContent = newQty
+    }
+    
+    // Plus button: increment by 1
+    plusBtn.addEventListener('click', () => {
+      updateDisplay(newQty + 1)
+    })
+    
+    // Minus button: decrement by 1
+    minusBtn.addEventListener('click', () => {
+      updateDisplay(newQty - 1)
+    })
+    
+    // Preset buttons: set exact value
+    quantityOverlay.querySelectorAll('.qty-preset').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const val = parseInt(btn.dataset.qty)
+        updateDisplay(val)
+      })
+    })
+    
+    quantityOverlay.querySelector('.qty-confirm').addEventListener('click', () => {
+      if (newQty > 0) {
+        owned[key] = newQty
+      } else {
+        delete owned[key]
+      }
+      persistOwned()
+      quantityOverlay.remove()
+      renderModalContent()
+      updateStats()
+      render()
+    })
+    
+    quantityOverlay.querySelector('.qty-cancel').addEventListener('click', () => {
+      quantityOverlay.remove()
+    })
+    
+    quantityOverlay.addEventListener('click', e => {
+      if (e.target === quantityOverlay) quantityOverlay.remove()
+    })
+    
+    document.body.appendChild(quantityOverlay)
   }
 
   renderModalContent()
@@ -327,6 +494,45 @@ function escapeHtml(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 }
 
+function showProPurchaseConfirm() {
+  const overlay = document.createElement('div')
+  overlay.className = 'confirm-overlay'
+  overlay.innerHTML = `
+    <div class="confirm-box pro-purchase">
+      <h3>Unlock Pro Features? 💎</h3>
+      <p>Collect parallel variants in 5 colors:</p>
+      <div class="pro-colors-preview">
+        <div class="color-swatch" style="background: #3b82f6;" title="Blue"></div>
+        <div class="color-swatch" style="background: #ef4444;" title="Red"></div>
+        <div class="color-swatch" style="background: #a855f7;" title="Purple"></div>
+        <div class="color-swatch" style="background: #22c55e;" title="Green"></div>
+        <div class="color-swatch" style="background: #1f2937;" title="Black"></div>
+      </div>
+      <p style="margin-top: 16px; font-weight: bold;">One-time purchase: $${PRO_PRICE.toFixed(2)}</p>
+      <div class="confirm-btns">
+        <button class="btn-cancel">Cancel</button>
+        <button class="btn-confirm">Purchase Pro</button>
+      </div>
+    </div>
+  `
+  overlay.querySelector('.btn-cancel').addEventListener('click', () => overlay.remove())
+  overlay.querySelector('.btn-confirm').addEventListener('click', async () => {
+    // In production, this would integrate with Stripe or another payment processor
+    // For now, we'll simulate a successful purchase
+    proStatus = {
+      purchased: true,
+      purchaseDate: new Date().toISOString()
+    }
+    saveProStatus(proStatus)
+    await pushProStatusToCloud()
+    overlay.remove()
+    updateAuthUI()
+    render()
+  })
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove() })
+  document.body.appendChild(overlay)
+}
+
 function updateAuthUI() {
   const el = document.getElementById('auth-section')
   if (!el) return
@@ -337,9 +543,13 @@ function updateAuthUI() {
           ? `<img src="${escapeHtml(currentUser.photoURL)}" class="user-avatar" referrerpolicy="no-referrer" alt="">`
           : '<span class="user-avatar-placeholder"><i class="ti ti-user"></i></span>'}
         <span class="user-name">${escapeHtml((currentUser.displayName || 'User').split(' ')[0])}</span>
+        ${proStatus.purchased ? '<span class="pro-badge">PRO</span>' : '<button class="pro-btn" id="pro-btn" title="Unlock pro features">Unlock Pro</button>'}
         <button class="sign-out-btn" id="sign-out-btn" title="Sign out"><i class="ti ti-logout"></i></button>
       </div>
     `
+    if (!proStatus.purchased) {
+      document.getElementById('pro-btn').addEventListener('click', showProPurchaseConfirm)
+    }
     document.getElementById('sign-out-btn').addEventListener('click', () => signOut(auth))
   } else {
     el.innerHTML = `
@@ -377,6 +587,7 @@ function showResetConfirm() {
   overlay.querySelector('.btn-confirm').addEventListener('click', () => {
     owned = {}
     saveOwned(owned)
+    pushToCloud(owned)  // Also clear cloud data
     overlay.remove()
     render()
   })
@@ -396,7 +607,7 @@ function bootstrap() {
         </div>
         <div class="header-top">
           <div>
-            <div class="header-title">World Cup 2026 Stickers</div>
+            <div class="header-title">Jogo</div>
             <div class="header-sub">${TOTAL_STICKERS} stickers · 48 teams</div>
           </div>
           <div class="header-actions">
@@ -430,8 +641,8 @@ function bootstrap() {
         <div class="sidebar-divider"></div>
         <div class="sidebar-section-label">View</div>
         <div class="view-toggle-row">
-          <button class="view-toggle-btn active" data-v="list"><i class="ti ti-list"></i> List</button>
-          <button class="view-toggle-btn" data-v="group"><i class="ti ti-layout-grid"></i> By Group</button>
+          <button class="view-toggle-btn" data-v="list"><i class="ti ti-list"></i> List</button>
+          <button class="view-toggle-btn active" data-v="group"><i class="ti ti-layout-grid"></i> By Group</button>
         </div>
       </aside>
       <div class="main-content">
@@ -489,12 +700,20 @@ onAuthStateChanged(auth, async user => {
   currentUser = user
   if (user) {
     try {
-      const snap = await getDoc(cloudRef(user.uid))
-      if (snap.exists()) {
-        owned = snap.data().owned || {}
+      // Load stickers
+      const stickerSnap = await getDoc(cloudRef(user.uid))
+      if (stickerSnap.exists()) {
+        owned = stickerSnap.data().owned || {}
         saveOwned(owned)
       } else if (Object.keys(owned).length > 0) {
         await pushToCloud(owned)
+      }
+      
+      // Load pro status
+      const proSnap = await getDoc(proRef(user.uid))
+      if (proSnap.exists()) {
+        proStatus = { purchased: proSnap.data().purchased, purchaseDate: proSnap.data().purchaseDate }
+        saveProStatus(proStatus)
       }
     } catch (e) {
       console.error('Failed to load cloud data', e)
@@ -503,6 +722,8 @@ onAuthStateChanged(auth, async user => {
   } else {
     stopSync()
     owned = {}
+    saveOwned({})  // Clear localStorage on logout to prevent data leaking to next user
+    proStatus = { purchased: false, purchaseDate: null }
   }
   updateAuthUI()
   updateStats()

@@ -18,10 +18,14 @@ function makeTeamStickers() {
 export const TEAMS = [
   {
     code: 'INT', name: 'Introduction', flag: '🏆', stickers: [
-      { n: 1, t: 'Logo', foil: true }, { n: 2, t: 'Trophy', foil: true },
-      { n: 3, t: 'Mascot', foil: true }, { n: 4, t: 'Emblem', foil: true },
-      { n: 5, t: 'USA Host', foil: false }, { n: 6, t: 'Canada Host', foil: false },
-      { n: 7, t: 'Mexico Host', foil: false }, { n: 8, t: 'Intro', foil: false },
+      { n: 1, t: 'Logo', foil: true }, 
+      { n: 2, t: 'Trophy', foil: true, img: 'https://upload.wikimedia.org/wikipedia/en/e/e3/2026_FIFA_World_Cup.png' },
+      { n: 3, t: 'Mascot', foil: true }, 
+      { n: 4, t: 'Emblem', foil: true },
+      { n: 5, t: 'USA Host', foil: false }, 
+      { n: 6, t: 'Canada Host', foil: false },
+      { n: 7, t: 'Mexico Host', foil: false }, 
+      { n: 8, t: 'Intro', foil: false },
       { n: 9, t: 'Intro', foil: false },
     ]
   },
@@ -46,7 +50,7 @@ export const TEAMS = [
   { code: 'CZE', name: 'Czechia', flag: '🇨🇿', stickers: makeTeamStickers() },
   { code: 'ECU', name: 'Ecuador', flag: '🇪🇨', stickers: makeTeamStickers() },
   { code: 'EGY', name: 'Egypt', flag: '🇪🇬', stickers: makeTeamStickers() },
-  { code: 'ENG', name: 'England', flag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', stickers: makeTeamStickers() },
+  { code: 'ENG', name: 'England', flag: '�🇧', stickers: makeTeamStickers() },
   { code: 'ESP', name: 'Spain', flag: '🇪🇸', stickers: makeTeamStickers() },
   { code: 'FRA', name: 'France', flag: '🇫🇷', stickers: makeTeamStickers() },
   { code: 'GER', name: 'Germany', flag: '🇩🇪', stickers: makeTeamStickers() },
@@ -68,7 +72,7 @@ export const TEAMS = [
   { code: 'POR', name: 'Portugal', flag: '🇵🇹', stickers: makeTeamStickers() },
   { code: 'QAT', name: 'Qatar', flag: '🇶🇦', stickers: makeTeamStickers() },
   { code: 'RSA', name: 'South Africa', flag: '🇿🇦', stickers: makeTeamStickers() },
-  { code: 'SCO', name: 'Scotland', flag: '🏴󠁧󠁢󠁳󠁣󠁴󠁿', stickers: makeTeamStickers() },
+  { code: 'SCO', name: 'Scotland', flag: '�🇧', stickers: makeTeamStickers() },
   { code: 'SEN', name: 'Senegal', flag: '🇸🇳', stickers: makeTeamStickers() },
   { code: 'SUI', name: 'Switzerland', flag: '🇨🇭', stickers: makeTeamStickers() },
   { code: 'SWE', name: 'Sweden', flag: '🇸🇪', stickers: makeTeamStickers() },
