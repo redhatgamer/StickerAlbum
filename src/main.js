@@ -97,11 +97,20 @@ function teamOwned(team) {
 
 function totalOwned() {
   // For non-pro: count unique stickers
-  // For pro: sum all quantities
+  // For pro: count only the first copy of each sticker as collected
   if (proStatus.purchased) {
-    return Object.keys(owned).reduce((sum, k) => sum + (owned[k] || 0), 0)
+    return Object.keys(owned).filter(k => owned[k] > 0).length
   }
   return Object.keys(owned).filter(k => owned[k]).length
+}
+
+function totalDuplicates() {
+  // For pro: count all copies beyond the first one
+  if (!proStatus.purchased) return 0
+  return Object.keys(owned).reduce((sum, k) => {
+    const qty = owned[k] || 0
+    return sum + Math.max(0, qty - 1)
+  }, 0)
 }
 
 function teamMatchesFilter(team) {
@@ -116,10 +125,13 @@ function teamMatchesFilter(team) {
 
 function updateStats() {
   const have = totalOwned()
+  const dupes = totalDuplicates()
   const pct = Math.round((have / TOTAL_STICKERS) * 100)
   document.getElementById('s-have').textContent = have
   document.getElementById('s-need').textContent = TOTAL_STICKERS - have
   document.getElementById('s-pct').textContent = pct + '%'
+  const dupeEl = document.getElementById('s-dupes')
+  if (dupeEl) dupeEl.textContent = dupes
   document.getElementById('global-bar').style.width = pct + '%'
 }
 
@@ -627,6 +639,7 @@ function bootstrap() {
           <div class="stat-card"><div class="stat-val" id="s-have">0</div><div class="stat-lbl">collected</div></div>
           <div class="stat-card"><div class="stat-val" id="s-need">${TOTAL_STICKERS}</div><div class="stat-lbl">missing</div></div>
           <div class="stat-card"><div class="stat-val" id="s-pct">0%</div><div class="stat-lbl">complete</div></div>
+          <div class="stat-card"><div class="stat-val" id="s-dupes">0</div><div class="stat-lbl">duplicates</div></div>
         </div>
         <div class="sidebar-section-label">Filter</div>
         <div class="search-wrap">
